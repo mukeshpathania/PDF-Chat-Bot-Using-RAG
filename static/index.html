@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PdfChat — AI Document Chat</title>
+  <meta name="description" content="Upload a PDF and chat with it using AI. Powered by RAG and Groq LLaMA." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+
+  <div class="layout">
+
+    <!-- ── LEFT PANEL ── -->
+    <aside class="panel-left">
+
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M4 5h14M4 9h10M4 13h12M4 17h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span class="brand-name">PdfChat</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="upload-area">
+        <p class="label">DOCUMENT</p>
+
+        <div class="dropzone" id="dropZone">
+          <div class="dz-inner">
+            <div class="dz-icon-wrap" id="dzIcon">
+              <svg class="dz-icon" width="30" height="30" viewBox="0 0 30 30" fill="none">
+                <path d="M15 5v16M7 13l8-8 8 8" stroke="url(#g1)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4 24h22" stroke="url(#g1)" stroke-width="2.2" stroke-linecap="round"/>
+                <defs>
+                  <linearGradient id="g1" x1="4" y1="5" x2="26" y2="25" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#818cf8"/>
+                    <stop offset="1" stop-color="#38bdf8"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <p class="dz-title">Drop your PDF here</p>
+            <p class="dz-sub">or <span class="dz-link">click to browse</span></p>
+          </div>
+          <input type="file" id="fileInput" accept=".pdf" hidden />
+        </div>
+
+        <!-- Upload states -->
+        <div id="stateIdle"    class="state state-idle">No document loaded</div>
+        <div id="stateLoading" class="state state-loading hidden">
+          <div class="loader-ring"></div><span>Indexing document…</span>
+        </div>
+        <div id="stateSuccess" class="state state-success hidden">
+          <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#4ade80"/><path d="M4 7l2.2 2.2L10 4.8" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="successMsg">Ready</span>
+        </div>
+        <div id="stateError"   class="state state-error hidden">
+          <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#f87171"/><path d="M4.5 4.5l5 5M9.5 4.5l-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <span id="errorMsg">Upload failed</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="info-block">
+        <p class="label">MODEL</p>
+        <div class="model-tag">
+          <span class="live-dot"></span>
+          <span>LLaMA 3.1 · Groq</span>
+        </div>
+      </div>
+
+      <div class="info-block">
+        <p class="label">HOW IT WORKS</p>
+        <ul class="steps">
+          <li><span class="step-num">1</span>Upload a PDF document</li>
+          <li><span class="step-num">2</span>Ask any question</li>
+          <li><span class="step-num">3</span>Get AI answers from the doc</li>
+        </ul>
+      </div>
+
+    </aside>
+
+    <!-- ── RIGHT PANEL ── -->
+    <main class="panel-right">
+
+      <header class="chat-topbar">
+        <div class="topbar-left">
+          <h1 class="chat-title">Document Chat</h1>
+          <p class="chat-sub" id="chatSub">Upload a PDF to begin</p>
+        </div>
+        <button class="icon-btn" id="clearBtn" title="Clear chat">
+          <svg width="17" height="17" viewBox="0 0 17 17" fill="none">
+            <path d="M2.5 4.5h12M6 4.5V3h5v1.5M13.5 4.5l-.7 9.5H4.2l-.7-9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="messages" id="messages">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-glow"></div>
+          <div class="empty-icon">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <path d="M8 8h12M8 13h8M8 18h10" stroke="#888" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h2>Chat with your document</h2>
+          <p>Upload a PDF and ask questions. The AI answers exclusively from the document's content using retrieval-augmented generation.</p>
+          <div class="chips" id="chipsContainer">
+            <button class="chip" data-q="Summarize this document in a few sentences">📄 Summarize document</button>
+            <button class="chip" data-q="What are the key points discussed?">🔑 Key points</button>
+            <button class="chip" data-q="What skills or technologies are mentioned?">⚙️ Skills mentioned</button>
+            <button class="chip" data-q="What is the main topic of this document?">🎯 Main topic</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-zone">
+        <div class="input-box" id="inputBox">
+          <textarea
+            id="questionInput"
+            placeholder="Ask anything about your document…"
+            rows="1"
+            disabled
+          ></textarea>
+          <button class="send-btn" id="sendBtn" disabled>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M2.5 9h13M10 3.5L15.5 9 10 14.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <p class="input-note">Answers are grounded in your uploaded document only · Shift+Enter for new line</p>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>

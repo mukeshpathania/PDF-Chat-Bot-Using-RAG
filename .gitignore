@@ -1,0 +1,58 @@
+# ── Environment & Secrets ───────────────────────────
+.env
+.env.*
+.envrc
+
+# ── Python Virtual Environment ───────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Python Cache ─────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# ── Uploaded Files (user data, not source) ───────────
+uploads/
+temp_*.pdf
+
+# ── ChromaDB Vector Store (auto-rebuilt on upload) ───
+chroma_db/
+
+# ── SQLite Database ───────────────────────────────────
+db/*.db
+*.sqlite3
+*.sqlite
+
+# ── Logs ─────────────────────────────────────────────
+*.log
+logs/
+
+# ── OS Files ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE / Editor ─────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+
+# ── Build / Dist ─────────────────────────────────────
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# ── Testing ──────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── Jupyter ──────────────────────────────────────────
+.ipynb_checkpoints/
