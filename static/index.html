@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="/static/style.css?v=2" />
 </head>
 <body>
 
@@ -73,9 +73,90 @@
         <p class="label">MODEL</p>
         <div class="model-tag">
           <span class="live-dot"></span>
-          <span>LLaMA 3.1 · Groq</span>
+          <span id="activeModelLabel">LLaMA 3.3 · Groq</span>
         </div>
       </div>
+
+      <div class="divider"></div>
+
+      <!-- ⚙️ Model Settings -->
+      <div class="info-block">
+        <button class="settings-toggle" id="settingsToggle" aria-expanded="false">
+          <p class="label">⚙️ MODEL SETTINGS</p>
+          <svg class="settings-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <div class="settings-body" id="settingsBody">
+          <div class="settings-inner">
+
+            <!-- Model -->
+            <div class="setting-row">
+              <div class="setting-label"><span>Model</span></div>
+              <select class="setting-select" id="settingModel">
+                <option value="llama-3.3-70b-versatile">LLaMA 3.3 70B (default)</option>
+                <option value="llama-3.1-8b-instant">LLaMA 3.1 8B (fast)</option>
+                <option value="gemma2-9b-it">Gemma 2 9B</option>
+                <option value="mixtral-8x7b-32768">Mixtral 8x7B (long ctx)</option>
+              </select>
+            </div>
+
+            <div class="setting-divider"></div>
+
+            <!-- Temperature -->
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Temperature</span>
+                <span class="setting-value" id="tempVal">0.70</span>
+              </div>
+              <input type="range" class="setting-slider" id="settingTemp"
+                min="0" max="1.5" step="0.05" value="0.7" />
+            </div>
+
+            <div class="setting-divider"></div>
+
+            <!-- Max Tokens -->
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Max Tokens</span>
+                <span class="setting-value" id="tokensVal">512</span>
+              </div>
+              <input type="range" class="setting-slider" id="settingTokens"
+                min="100" max="2048" step="50" value="512" />
+            </div>
+
+            <div class="setting-divider"></div>
+
+            <!-- Retrieved Chunks (k) -->
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Retrieved Chunks</span>
+                <span class="setting-value" id="kVal">8</span>
+              </div>
+              <input type="range" class="setting-slider" id="settingK"
+                min="3" max="15" step="1" value="8" />
+            </div>
+
+            <div class="setting-divider"></div>
+
+            <!-- Reranked Chunks -->
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Reranked Chunks</span>
+                <span class="setting-value" id="topNVal">3</span>
+              </div>
+              <input type="range" class="setting-slider" id="settingTopN"
+                min="1" max="5" step="1" value="3" />
+            </div>
+
+            <button class="settings-reset" id="settingsReset">↺ Reset to defaults</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="divider"></div>
 
       <div class="info-block">
         <p class="label">HOW IT WORKS</p>

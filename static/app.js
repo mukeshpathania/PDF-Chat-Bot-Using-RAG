@@ -24,6 +24,7 @@ const chipsContainer= document.getElementById('chipsContainer');
 
 let docLoaded = false;
 let currentFilename = ''; // Server-normalized filename — always matches ChromaDB index
+let chatHistory = [];    // Conversation memory: [{role, content}, ...]
 
 /* ══════════════════════════════════════════════════════
    UPLOAD
@@ -68,6 +69,7 @@ async function uploadFile(file) {
     chatSub.textContent = currentFilename;
 
     // Clear previous chat so old answers from another doc don't linger
+    chatHistory = [];
     clearChat(currentFilename);
 
   } catch (err) {
@@ -154,12 +156,21 @@ async function askQuestion() {
     const res = await fetch(`${API}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: q, filename: currentFilename }),
+      body: JSON.stringify({
+        question: q,
+        filename: currentFilename,
+        chat_history: chatHistory,
+        ...getModelSettings(),
+      }),
     });
     if (!res.ok) throw new Error(`Server returned ${res.status}`);
     const data = await res.json();
     removeTyping(typingId);
     appendMsg('ai', data.answer);
+
+    // Save this Q&A turn to memory for follow-up context
+    chatHistory.push({ role: 'user',      content: q });
+    chatHistory.push({ role: 'assistant', content: data.answer });
 
   } catch (err) {
     removeTyping(typingId);
@@ -270,6 +281,83 @@ function clearChat(filename = '') {
 
 clearBtn.addEventListener('click', () => {
   const currentFile = docLoaded ? chatSub.textContent : '';
+  chatHistory = [];
   clearChat(currentFile);
 });
 
+
+/* ══════════════════════════════════════════════════════
+   MODEL SETTINGS PANEL
+══════════════════════════════════════════════════════ */
+
+const settingsToggle = document.getElementById('settingsToggle');
+const settingsBody   = document.getElementById('settingsBody');
+const settingModel   = document.getElementById('settingModel');
+const settingTemp    = document.getElementById('settingTemp');
+const settingTokens  = document.getElementById('settingTokens');
+const settingK       = document.getElementById('settingK');
+const settingTopN    = document.getElementById('settingTopN');
+const settingsReset  = document.getElementById('settingsReset');
+const activeModelLabel = document.getElementById('activeModelLabel');
+
+// Friendly display names for the model tag
+const MODEL_LABELS = {
+  'llama-3.3-70b-versatile': 'LLaMA 3.3 70B · Groq',
+  'llama-3.1-8b-instant':    'LLaMA 3.1 8B · Groq',
+  'gemma2-9b-it':            'Gemma 2 9B · Groq',
+  'mixtral-8x7b-32768':      'Mixtral 8x7B · Groq',
+};
+
+// Defaults
+const DEFAULTS = { model: 'llama-3.3-70b-versatile', temp: 0.7, tokens: 512, k: 8, topN: 3 };
+
+// Toggle open/close
+settingsToggle.addEventListener('click', () => {
+  const isOpen = settingsBody.classList.toggle('open');
+  settingsToggle.classList.toggle('open', isOpen);
+  settingsToggle.setAttribute('aria-expanded', isOpen);
+});
+
+// Live slider labels
+settingTemp.addEventListener('input', () => {
+  document.getElementById('tempVal').textContent = parseFloat(settingTemp.value).toFixed(2);
+});
+settingTokens.addEventListener('input', () => {
+  document.getElementById('tokensVal').textContent = settingTokens.value;
+});
+settingK.addEventListener('input', () => {
+  document.getElementById('kVal').textContent = settingK.value;
+});
+settingTopN.addEventListener('input', () => {
+  document.getElementById('topNVal').textContent = settingTopN.value;
+});
+
+// Update model tag when model changes
+settingModel.addEventListener('change', () => {
+  activeModelLabel.textContent = MODEL_LABELS[settingModel.value] || settingModel.value;
+});
+
+// Reset to defaults
+settingsReset.addEventListener('click', () => {
+  settingModel.value  = DEFAULTS.model;
+  settingTemp.value   = DEFAULTS.temp;
+  settingTokens.value = DEFAULTS.tokens;
+  settingK.value      = DEFAULTS.k;
+  settingTopN.value   = DEFAULTS.topN;
+  document.getElementById('tempVal').textContent   = DEFAULTS.temp.toFixed(2);
+  document.getElementById('tokensVal').textContent = DEFAULTS.tokens;
+  document.getElementById('kVal').textContent      = DEFAULTS.k;
+  document.getElementById('topNVal').textContent   = DEFAULTS.topN;
+  activeModelLabel.textContent = MODEL_LABELS[DEFAULTS.model];
+});
+
+/** Returns the current settings object to attach to every /query request */
+function getModelSettings() {
+  return {
+    llm_model:    settingModel.value,
+    temperature:  parseFloat(settingTemp.value),
+    max_tokens:   parseInt(settingTokens.value, 10),
+    retrieval_k:  parseInt(settingK.value, 10),
+    rerank_top_n: parseInt(settingTopN.value, 10),
+  };
+}
