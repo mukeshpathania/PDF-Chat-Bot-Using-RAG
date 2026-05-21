@@ -2,7 +2,7 @@
 
 An elite, high-performance **Retrieval-Augmented Generation (RAG)** system designed to ingest, process, and query PDF documents with extreme precision. Built using a modern **FastAPI** backend, **ChromaDB** vector database, local embedding & reranking models, and **Groq's Llama 3.3** model for near-instantaneous contextual answers.
 
-This project delivers a state-of-the-art RAG pipeline, complete with a beautiful, responsive, glassmorphic frontend interface featuring fluid background particle effects.
+This project delivers a state-of-the-art RAG pipeline, complete with a beautiful, responsive, glassmorphic frontend interface featuring fluid background particle effects, **persistent multi-turn chat memory**, **intelligent follow-up question detection**, and a fully configurable **Model Settings Panel**.
 
 ---
 
@@ -24,16 +24,19 @@ flowchart TD
 
     subgraph Querying ["Phase B: Search & RAG Querying (Run Time)"]
         I[User Question + Select Doc] --> J[FastAPI Query Endpoint]
-        J --> K[ChromaDB Filtered Search: MMR]
+        J --> J2{Follow-up Detected?}
+        J2 -- Yes --> J3[Rephrase Previous Answer via Groq]
+        J3 --> S[Display to User in Chat UI]
+        J2 -- No --> K[ChromaDB Filtered Search: MMR]
         H -.-> K
-        K --> L{8 Candidates Fetched}
+        K --> L{k Candidates Fetched - default 8}
         L --> M[Quality Filter: >60 chars]
         M --> N[Cross-Encoder Reranker: ms-marco-MiniLM-L-6-v2]
-        N --> O[Top 3 Context Chunks Selected]
+        N --> O[Top N Context Chunks Selected - default 3]
         O --> P[Prompt construction + System instructions]
-        P --> Q[Groq API: Llama 3.3 70B]
+        P --> Q[Groq API: Configurable LLM Model]
         Q --> R[Concise & Fact-Bounded Answer]
-        R --> S[Display to User in Chat UI]
+        R --> S
     end
 
     style Ingestion fill:#1a1b26,stroke:#7aa2f7,stroke-width:2px,color:#a9b1d6
@@ -61,14 +64,25 @@ When you ask a question about a specific document, the retriever acts as a **two
 * **Layer 1: Metadata Filter:** The search is strictly locked down to the selected document using ChromaDB's native metadata filtering. This guarantees that your question is *only* evaluated against the selected file, preventing context-leaks from other uploaded documents.
 * **Fallback Safety-Net:** In case the underlying vector store library ignores the metadata filter (a known issue in certain version combinations of LangChain/ChromaDB), a bulletproof **Python-level source filter** acts as a backup, dropping any chunk that does not originate from the target document.
 * **Quality Filtering:** Any chunk containing less than 60 characters (e.g., page numbers, single words, footer fragments) is instantly discarded, ensuring the LLM is only fed high-density information.
+* **Configurable Retrieval k:** The number of broad candidates fetched from ChromaDB is user-controlled (default: **8**, range: 3–15) via the Model Settings Panel. Similarly, the number of reranked chunks passed to the LLM is configurable (default: **3**, range: 1–5).
+
+### 3.5 Intelligent Follow-Up Question Detection
+
+The system can distinguish between a **new document question** (requires full RAG retrieval) and a **follow-up reformatting request** (e.g., *"make it shorter"*, *"give me bullet points"*). This prevents unnecessary vector searches and produces faster, more coherent responses.
+
+**How it works:**
+1. A regex pattern bank (`FOLLOWUP_PATTERNS`) matches phrases like `summarize it`, `in 3 lines`, `shorten`, `rephrase`, `make it`, `bullet points`, etc.
+2. If the question is ≤ 12 words **and** matches a follow-up pattern, the system **skips RAG entirely**.
+3. Instead, the **last assistant answer** is extracted from `chat_history` and injected into a dedicated `FOLLOWUP_SYSTEM_PROMPT` — the model rephrases its own previous response.
+4. If neither condition is met, the full retrieval → rerank → generate pipeline runs normally.
 
 ### 4. Why Rerank? (Bi-Encoder vs. Cross-Encoder)
 A standard RAG pipeline suffers from semantic mismatch because it relies entirely on **Bi-Encoders** (vector similarity). Vector stores calculate similarity between the query embedding and the chunk embedding *independently*. This is fast but doesn't capture the deep semantic interactions between words.
 
 To solve this, our system introduces a **Cross-Encoder Reranker** (`ms-marco-MiniLM-L-6-v2`):
-1. **Retriever Phase:** A broad search fetches **8 candidates** using **Maximal Marginal Relevance (MMR)**. MMR balances query relevance with document diversity, preventing near-duplicate sentences from filling up the context.
-2. **Reranker Phase:** The 8 candidates and the question are fed *together* into the Cross-Encoder. The Cross-Encoder performs intensive pairwise attention modeling to score the relevance of each chunk.
-3. **Selection Phase:** The candidates are sorted, and only the **top 3 absolute best chunks** are forwarded to the LLM. 
+1. **Retriever Phase:** A broad search fetches **k candidates** (default: 8, configurable via UI) using **Maximal Marginal Relevance (MMR)**. MMR balances query relevance with document diversity, preventing near-duplicate sentences from filling up the context.
+2. **Reranker Phase:** The k candidates and the question are fed *together* into the Cross-Encoder. The Cross-Encoder performs intensive pairwise attention modeling to score the relevance of each chunk.
+3. **Selection Phase:** The candidates are sorted, and only the **top N absolute best chunks** (default: 3, configurable via UI) are forwarded to the LLM.
 4. **Result:** Extreme relevance, minimal token usage, and significantly faster processing times.
 
 ```
@@ -80,16 +94,26 @@ To solve this, our system introduces a **Cross-Encoder Reranker** (`ms-marco-Min
                              │
                              ▼
                   ┌───────────────────────┐
-                  │ 8 Broad Candidates    │
+                  │ k Broad Candidates    │
+                  │   (default: 8)        │
                   └──────────┬────────────┘
                              │
             [Cross-Encoder Pairwise Attention]
                              │
                              ▼
                   ┌───────────────────────┐
-                  │ 3 Ultra-Precise Chunks│
+                  │ N Ultra-Precise Chunks│
+                  │   (default: 3)        │
                   └───────────────────────┘
 ```
+
+### 4.5 Multi-Turn Chat Memory
+
+The frontend maintains a `chatHistory` array that records every `{ role, content }` pair for the current document session. This array is sent with every `/query` request, enabling:
+
+* **Context-aware answers:** The LLM receives prior turns as context, so it can answer *"what did you just say about X?"* or refer back to earlier parts of the conversation.
+* **Session isolation:** `chatHistory` is **automatically cleared** whenever the user uploads a new document or clicks "Clear Database", preventing cross-document context bleed.
+* **Follow-up routing:** The presence of history is a prerequisite for follow-up detection — a question can only be a follow-up if a previous exchange exists.
 
 ### 5. Prompt Guardrails & Fact-Bounded Answer Generation
 The final 3 chunks are formatted into a clean string and injected into the LLM system prompt. The model used is **Llama 3.3 70B** via the ultra-low-latency **Groq API**.
@@ -102,13 +126,14 @@ The final 3 chunks are formatted into a clean string and injected into the LLM s
 
 | Component | Technology | Role |
 | :--- | :--- | :--- |
-| **Frontend** | Vanilla HTML5 / Modern CSS / ES6 JS | Beautiful, ultra-premium interface featuring particle effects (`bg.js`), glassmorphic panels, dynamic upload states, and animated chat streams. |
+| **Frontend** | Vanilla HTML5 / Modern CSS / ES6 JS | Ultra-premium glassmorphic interface with particle effects (`bg.js`), animated chat streams, persistent **multi-turn chat memory**, and a fully interactive **Model Settings Panel** with live sliders. |
+| **Settings Panel** | Collapsible UI widget (HTML + CSS + JS) | Lets users switch LLM model, adjust temperature (0–1.5), max tokens (100–2048), retrieved chunks k (3–15), and reranked chunks top-N (1–5) — all without touching any config file. |
 | **Server Framework** | **FastAPI** (Python) | High-performance, asynchronous web server providing robust JSON endpoints. |
 | **Metadata DB** | **SQLite** | Local relational database tracking file uploads and physical storage paths. |
 | **Vector DB** | **ChromaDB** | High-performance developer-friendly vector database storing and querying chunk embeddings. |
 | **Embeddings** | HuggingFace `BAAI/bge-small-en` | Encodes text chunks into dense vectors. |
 | **Reranker** | CrossEncoder `ms-marco-MiniLM-L-6-v2` | Performs semantic re-scoring on retrieved text segments. |
-| **LLM Engine** | **Groq Cloud API** (`llama-3.3-70b-versatile`) | Lightning-fast inference engine producing natural, precise responses. |
+| **LLM Engine** | **Groq Cloud API** (multi-model: LLaMA 3.3 70B, LLaMA 3.1 8B, Gemma 2 9B, Mixtral 8x7B) | Lightning-fast inference engine producing natural, precise responses. |
 
 ---
 
@@ -131,7 +156,7 @@ Chat-Bot/
 ├── retriever/
 │   └── retriever.py     # MMR vector search, document/quality filtering
 ├── static/              # Frontend Assets
-│   ├── app.js           # Main UI logic (API integration, chat animations)
+│   ├── app.js           # Main UI logic (API integration, chat memory, model settings panel)
 │   ├── bg.js            # Particle background effects and canvas animation
 │   ├── index.html       # Single-page glassmorphism layout
 │   └── style.css        # Premium styling system, animations, responsive grids
@@ -202,4 +227,6 @@ Open your browser and navigate to:
 1. **Upload a PDF:** Drag & drop or browse a PDF using the upload panel on the left. The document will immediately be parsed, broken into chunks, embedded, and indexed.
 2. **Select Document:** Click on any uploaded document in the list to "active lock" the chat context onto it.
 3. **Ask Away:** Type your question in the message field. Watch as the dual-stage retrieval fetches the exact facts, passes them to Llama 3.3, and streams a citation-pure, hallucination-free response!
-4. **Reset/Clear Index:** Press the "Clear Database" button to wipe the SQLite index, clean the local `uploads/` folder, and flush ChromaDB, leaving the system completely fresh.
+4. **Ask Follow-Ups:** After receiving an answer, you can ask follow-up reformatting requests like *"make it shorter"*, *"give me 3 bullet points"*, or *"explain in simpler terms"* — the system will detect this automatically and skip RAG to rephrase its own previous answer.
+5. **Tune the Model:** Click the ⚙️ **Model Settings** panel in the sidebar to switch between LLM models (LLaMA 3.3 70B, LLaMA 3.1 8B, Gemma 2 9B, Mixtral 8x7B), adjust temperature, max tokens, and RAG retrieval parameters — all live, without restarting the server.
+6. **Reset/Clear Index:** Press the "Clear Database" button to wipe the SQLite index, clean the local `uploads/` folder, and flush ChromaDB, leaving the system completely fresh.
