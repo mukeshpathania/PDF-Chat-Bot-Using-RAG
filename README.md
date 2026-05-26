@@ -1,3 +1,15 @@
+---
+title: Advanced PDF RAG ChatBot
+emoji: 🤖
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Chat with your PDFs using RAG, ChromaDB & Groq LLaMA 3.3
+---
+
 # 🤖 Advanced PDF-RAG ChatBot
 
 An elite, high-performance **Retrieval-Augmented Generation (RAG)** system designed to ingest, process, and query PDF documents with extreme precision. Built using a modern **FastAPI** backend, **ChromaDB** vector database, local embedding & reranking models, and **Groq's Llama 3.3** model for near-instantaneous contextual answers.
