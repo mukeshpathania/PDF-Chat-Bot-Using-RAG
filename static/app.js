@@ -318,18 +318,35 @@ settingsToggle.addEventListener('click', () => {
   settingsToggle.setAttribute('aria-expanded', isOpen);
 });
 
-// Live slider labels
+// ── Slider fill helper ────────────────────────────────
+// Sets the CSS --pct variable so the gradient track fills up to the thumb.
+function updateSliderFill(slider) {
+  const min = parseFloat(slider.min)  || 0;
+  const max = parseFloat(slider.max)  || 100;
+  const val = parseFloat(slider.value);
+  const pct = ((val - min) / (max - min)) * 100;
+  slider.style.setProperty('--pct', pct + '%');
+}
+
+// Initialise all sliders on page load
+[settingTemp, settingTokens, settingK, settingTopN].forEach(updateSliderFill);
+
+// Live slider labels + track fill
 settingTemp.addEventListener('input', () => {
   document.getElementById('tempVal').textContent = parseFloat(settingTemp.value).toFixed(2);
+  updateSliderFill(settingTemp);
 });
 settingTokens.addEventListener('input', () => {
   document.getElementById('tokensVal').textContent = settingTokens.value;
+  updateSliderFill(settingTokens);
 });
 settingK.addEventListener('input', () => {
   document.getElementById('kVal').textContent = settingK.value;
+  updateSliderFill(settingK);
 });
 settingTopN.addEventListener('input', () => {
   document.getElementById('topNVal').textContent = settingTopN.value;
+  updateSliderFill(settingTopN);
 });
 
 // Update model tag when model changes
@@ -349,6 +366,8 @@ settingsReset.addEventListener('click', () => {
   document.getElementById('kVal').textContent      = DEFAULTS.k;
   document.getElementById('topNVal').textContent   = DEFAULTS.topN;
   activeModelLabel.textContent = MODEL_LABELS[DEFAULTS.model];
+  // Re-sync fill after reset
+  [settingTemp, settingTokens, settingK, settingTopN].forEach(updateSliderFill);
 });
 
 /** Returns the current settings object to attach to every /query request */
