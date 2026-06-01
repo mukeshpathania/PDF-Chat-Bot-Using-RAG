@@ -54,10 +54,25 @@ NEWINFO_PATTERNS = re.compile(
     r"""
     \b(
       full | complete | all | entire | everything |
-      more\s*(detail|information|info|on|about) |
+      more\s*(detail|information|info|on|about|suggestion|suggestions) |
       technical | in[-\s]?depth | elaborate |
       expand | explain\s*(more|further|it|that) |
-      give\s*me\s*(more|full|all|complete|detailed?|technical|everything)
+      give\s*me\s*(more|full|all|complete|detailed?|technical|everything) |
+      suggestion | suggestions | recommend | recommendation
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Patterns that signal a REAL substantive question about the document's subject matter.
+# If ANY of these appear, it must go to full RAG — no matter what else is in the question.
+INTERROGATIVE_PATTERNS = re.compile(
+    r"""
+    \b(
+      should | would | could | can | is | are | was | were | will | does | do | did |
+      what | who | how | why | when | where | which |
+      hire | hiring | suited | suitable | fit | qualified | qualify | good\s*for |
+      suggest | recommendation | advice | opinion | assess | evaluate | rate
     )\b
     """,
     re.IGNORECASE | re.VERBOSE,
@@ -65,16 +80,21 @@ NEWINFO_PATTERNS = re.compile(
 
 
 def is_followup(question: str, has_history: bool) -> bool:
-    """Return True only if the question is a pure reformatting/rephrasing of the previous answer.
+    """Return True ONLY if the question is a pure reformatting/rephrasing of the previous answer
+    with no substantive new question embedded in it.
     Returns False if the question requests new/broader information from the document."""
     if not has_history:
+        return False
+    # If the question contains a real interrogative or subject-matter word,
+    # it's a new question — always search the full document
+    if INTERROGATIVE_PATTERNS.search(question):
         return False
     # If the question asks for MORE / NEW info, always search the full document
     if NEWINFO_PATTERNS.search(question):
         return False
-    # Short questions (≤ 12 words) that match a reformatting pattern are follow-ups
+    # Short questions (≤ 8 words) that ONLY match a reformatting pattern are follow-ups
     word_count = len(question.split())
-    return bool(FOLLOWUP_PATTERNS.search(question)) and word_count <= 12
+    return bool(FOLLOWUP_PATTERNS.search(question)) and word_count <= 8
 
 
 @router.post("/query")
