@@ -29,18 +29,35 @@ Rules you MUST follow:
 
 FOLLOWUP_SYSTEM_PROMPT = """You are a helpful AI assistant engaged in a conversation with the user.
 The user is asking a follow-up question about your PREVIOUS answer — they want you to rephrase, shorten, expand, or reformat it.
-Use ONLY your previous answer as the source. Do NOT make up new information.
+Use ONLY your previous answer and the document context as the source. 
+If the user's question cannot be answered using the previous answer, use the provided document context to answer.
+Do NOT make up new information.
 Respond naturally and concisely."""
 
-# Patterns that signal a follow-up / reformatting request rather than a new document question
+# Patterns that signal a PURE reformatting request (no new info needed from the doc)
 FOLLOWUP_PATTERNS = re.compile(
     r"""
     \b(
-      give\s*me | gimme | make\s*it | rewrite | summarize\s*(it|that|above|this) |
-      shorten | shorter | brief(er|ly)? | condense | simplify | expand |
-      explain\s*(more|it|that|further) | in\s*\d+\s*(lines?|sentences?|words?|points?) |
-      \d+\s*(lines?|sentences?|words?|points?) | more\s*detail | again | repeat |
+      gimme | make\s*it | rewrite | summarize\s*(it|that|above|this) |
+      shorten | shorter | brief(er|ly)? | condense | simplify |
+      in\s*\d+\s*(lines?|sentences?|words?|points?) |
+      \d+\s*(lines?|sentences?|words?|points?) | again | repeat |
       rephrase | reformat | bullet\s*points? | list\s*(it|them)
+    )\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+# Patterns that signal the user wants MORE / NEW info from the document
+# These must NEVER be treated as pure reformatting — always do full RAG retrieval
+NEWINFO_PATTERNS = re.compile(
+    r"""
+    \b(
+      full | complete | all | entire | everything |
+      more\s*(detail|information|info|on|about) |
+      technical | in[-\s]?depth | elaborate |
+      expand | explain\s*(more|further|it|that) |
+      give\s*me\s*(more|full|all|complete|detailed?|technical|everything)
     )\b
     """,
     re.IGNORECASE | re.VERBOSE,
@@ -48,10 +65,14 @@ FOLLOWUP_PATTERNS = re.compile(
 
 
 def is_followup(question: str, has_history: bool) -> bool:
-    """Return True if the question looks like a reformatting/follow-up request."""
+    """Return True only if the question is a pure reformatting/rephrasing of the previous answer.
+    Returns False if the question requests new/broader information from the document."""
     if not has_history:
         return False
-    # Short questions (≤ 12 words) that match a follow-up pattern are very likely follow-ups
+    # If the question asks for MORE / NEW info, always search the full document
+    if NEWINFO_PATTERNS.search(question):
+        return False
+    # Short questions (≤ 12 words) that match a reformatting pattern are follow-ups
     word_count = len(question.split())
     return bool(FOLLOWUP_PATTERNS.search(question)) and word_count <= 12
 
@@ -67,9 +88,9 @@ async def query_rag(data: QueryRequest):
         if msg.get("role") in ("user", "assistant") and msg.get("content")
     ]
 
-    # ── Follow-up path: rephrase / shorten / expand the PREVIOUS answer ──────
+    # ── Follow-up path: rephrase / shorten the PREVIOUS answer (pure reformatting) ──────
     if is_followup(data.question, bool(history_messages)):
-        print(f"[DEBUG] Detected follow-up question — skipping RAG retrieval")
+        print(f"[DEBUG] Detected follow-up question — also fetching doc context as fallback")
 
         # Find the last assistant answer to use as the source
         last_answer = ""
@@ -78,9 +99,17 @@ async def query_rag(data: QueryRequest):
                 last_answer = msg["content"]
                 break
 
+        # Always retrieve doc context so the LLM can pull from the full document
+        # if the previous answer doesn't contain enough information
+        candidate_docs = retrieve_documents(
+            data.question, search_type="mmr", k=data.retrieval_k, filename=data.filename
+        )
+        doc_context = rerank_context(data.question, candidate_docs, top_n=data.rerank_top_n) if candidate_docs else ""
+
         followup_user_msg = (
             f"Here is your previous answer:\n\n{last_answer}\n\n"
-            f"User follow-up: {data.question}"
+            + (f"Additional document context (use this if the previous answer is insufficient):\n\n{doc_context}\n\n" if doc_context else "")
+            + f"User follow-up: {data.question}"
         )
 
         response = client.chat.completions.create(
